@@ -5,8 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useAuth } from "@/hooks/useAuth";
 
 interface ChatSettings {
   context: string;
@@ -24,30 +22,22 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ isOpen, onClose, settings, onSettingsChange }: SettingsPanelProps) {
-  const { isAdmin } = useAuth();
-
   const handleChange = (field: keyof ChatSettings, value: string) => {
     onSettingsChange({ ...settings, [field]: value });
   };
 
-  if (!isOpen || !isAdmin) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="w-80 bg-white border-r shadow-lg flex flex-col">
       <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="text-lg font-semibold">Admin Settings</h2>
+        <h2 className="text-lg font-semibold">Settings</h2>
         <Button variant="ghost" size="sm" onClick={onClose}>
           <X className="w-4 h-4" />
         </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        <Alert>
-          <AlertDescription>
-            These settings are only accessible to admin users and control the AI assistant's behavior.
-          </AlertDescription>
-        </Alert>
-
         <div className="space-y-2">
           <Label htmlFor="apiKey">OpenAI API Key</Label>
           <Input
