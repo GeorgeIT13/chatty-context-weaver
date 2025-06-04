@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { useAuthWithUsername } from "@/hooks/useAuthWithUsername";
 import { User } from "@supabase/supabase-js";
 
 interface AuthPageProps {
@@ -17,8 +17,9 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const [emailOrUsername, setEmailOrUsername] = useState("");
+  
+  const { signUp, signIn, isLoading } = useAuthWithUsername({ onAuthSuccess });
 
   useEffect(() => {
     // Check if user is already logged in
@@ -31,75 +32,12 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            username: username
-          }
-        }
-      });
-
-      if (error) {
-        if (error.message.includes("User already registered")) {
-          toast({
-            title: "Account exists",
-            description: "An account with this email already exists. Please sign in instead.",
-            variant: "destructive"
-          });
-        } else {
-          throw error;
-        }
-      } else {
-        toast({
-          title: "Account created!",
-          description: "Please check your email to confirm your account.",
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    await signUp(email, password, username);
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data.user) {
-        onAuthSuccess(data.user);
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    await signIn(emailOrUsername, password);
   };
 
   return (
@@ -119,12 +57,13 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="signin-email-username">Email or Username</Label>
                   <Input
-                    id="signin-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="signin-email-username"
+                    type="text"
+                    value={emailOrUsername}
+                    onChange={(e) => setEmailOrUsername(e.target.value)}
+                    placeholder="Enter your email or username"
                     required
                   />
                 </div>
@@ -153,7 +92,10 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    placeholder="3-20 characters, letters, numbers, underscores"
                     required
+                    pattern="^[a-zA-Z0-9_]{3,20}$"
+                    title="Username must be 3-20 characters long and contain only letters, numbers, and underscores"
                   />
                 </div>
                 <div className="space-y-2">
