@@ -1,6 +1,6 @@
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Settings, Bot, User, HelpCircle } from "lucide-react";
+import { Send, Settings, Bot, User, HelpCircle, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
@@ -9,6 +9,8 @@ import { Message } from "./Message";
 import { FAQBot } from "./FAQBot";
 import { sendToOpenAI } from "@/utils/openai";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ChatMessage {
   id: string;
@@ -41,6 +43,7 @@ export function ChatBot() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user, userRole, signOut, isAdmin } = useAuth();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,16 +53,76 @@ export function ChatBot() {
     scrollToBottom();
   }, [messages]);
 
+  // Load chat history on component mount
+  useEffect(() => {
+    if (user && !isFAQMode) {
+      loadChatHistory();
+    }
+  }, [user, isFAQMode]);
+
+  const loadChatHistory = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('chat_history')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: true })
+        .limit(50);
+
+      if (error) throw error;
+
+      if (data) {
+        const chatMessages: ChatMessage[] = data.map(msg => ({
+          id: msg.id,
+          role: msg.message_role as "user" | "assistant",
+          content: msg.content,
+          timestamp: new Date(msg.timestamp)
+        }));
+        setMessages(chatMessages);
+      }
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+    }
+  };
+
+  const saveChatMessage = async (message: ChatMessage) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('chat_history')
+        .insert({
+          user_id: user.id,
+          message_role: message.role,
+          content: message.content
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving chat message:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
     if (isFAQMode) {
-      // FAQ mode - handle with FAQBot
       return;
     }
 
-    // AI mode - existing logic
+    // Check if user has admin role for API key access
+    if (!isAdmin && !settings.apiKey) {
+      toast({
+        title: "Access Required",
+        description: "Only admin users can configure API keys. Please contact an administrator.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!settings.apiKey) {
       toast({
         title: "API Key Required",
@@ -78,6 +141,7 @@ export function ChatBot() {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    await saveChatMessage(userMessage);
     setInput("");
     setIsLoading(true);
 
@@ -101,6 +165,7 @@ export function ChatBot() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      await saveChatMessage(assistantMessage);
     } catch (error) {
       console.error("Error calling OpenAI:", error);
       toast({
@@ -115,18 +180,30 @@ export function ChatBot() {
 
   const handleModeToggle = () => {
     setIsFAQMode(!isFAQMode);
-    setMessages([]); // Clear messages when switching modes
+    if (!isFAQMode) {
+      setMessages([]);
+    } else {
+      loadChatHistory();
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setMessages([]);
+    setSettings(prev => ({ ...prev, apiKey: "" }));
   };
 
   return (
     <div className="flex h-screen bg-white">
-      {/* Settings Panel */}
-      <SettingsPanel 
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        settings={settings}
-        onSettingsChange={setSettings}
-      />
+      {/* Settings Panel - Only show for admin users */}
+      {isAdmin && (
+        <SettingsPanel 
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+          settings={settings}
+          onSettingsChange={setSettings}
+        />
+      )}
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
@@ -163,7 +240,7 @@ export function ChatBot() {
               />
               <span className="text-sm text-gray-600">FAQ</span>
             </div>
-            {!isFAQMode && (
+            {!isFAQMode && isAdmin && (
               <Button 
                 variant="outline" 
                 size="sm"
@@ -174,6 +251,20 @@ export function ChatBot() {
                 Settings
               </Button>
             )}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                {user?.email} ({userRole})
+              </span>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleSignOut}
+                className="gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -191,7 +282,7 @@ export function ChatBot() {
                   </div>
                   <h2 className="text-2xl font-semibold text-gray-900 mb-2">Welcome to AI Assistant</h2>
                   <p className="text-gray-600 max-w-md">
-                    Start a conversation with your AI assistant. You can customize its behavior using the settings panel.
+                    Start a conversation with your AI assistant. {isAdmin ? "You can customize its behavior using the settings panel." : "Contact an admin to configure API settings."}
                   </p>
                 </div>
               )}
