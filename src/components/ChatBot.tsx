@@ -1,10 +1,12 @@
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Settings, Bot, User } from "lucide-react";
+import { Send, Settings, Bot, User, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Toggle } from "@/components/ui/toggle";
 import { SettingsPanel } from "./SettingsPanel";
 import { Message } from "./Message";
+import { FAQBot } from "./FAQBot";
 import { sendToOpenAI } from "@/utils/openai";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,6 +30,7 @@ export function ChatBot() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isFAQMode, setIsFAQMode] = useState(false);
   const [settings, setSettings] = useState<ChatSettings>({
     context: "You are a helpful AI assistant.",
     role: "assistant",
@@ -51,6 +54,12 @@ export function ChatBot() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    if (isFAQMode) {
+      // FAQ mode - handle with FAQBot
+      return;
+    }
+
+    // AI mode - existing logic
     if (!settings.apiKey) {
       toast({
         title: "API Key Required",
@@ -104,6 +113,11 @@ export function ChatBot() {
     }
   };
 
+  const handleModeToggle = () => {
+    setIsFAQMode(!isFAQMode);
+    setMessages([]); // Clear messages when switching modes
+  };
+
   return (
     <div className="flex h-screen bg-white">
       {/* Settings Panel */}
@@ -119,76 +133,108 @@ export function ChatBot() {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b bg-white shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <Bot className="w-6 h-6 text-white" />
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              isFAQMode 
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
+                : 'bg-gradient-to-r from-blue-500 to-purple-600'
+            }`}>
+              {isFAQMode ? (
+                <HelpCircle className="w-6 h-6 text-white" />
+              ) : (
+                <Bot className="w-6 h-6 text-white" />
+              )}
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">AI Assistant</h1>
-              <p className="text-sm text-gray-500">Powered by OpenAI</p>
-            </div>
-          </div>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setShowSettings(true)}
-            className="gap-2"
-          >
-            <Settings className="w-4 h-4" />
-            Settings
-          </Button>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4">
-                <Bot className="w-8 h-8 text-white" />
-              </div>
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Welcome to AI Assistant</h2>
-              <p className="text-gray-600 max-w-md">
-                Start a conversation with your AI assistant. You can customize its behavior using the settings panel.
+              <h1 className="text-xl font-semibold text-gray-900">
+                {isFAQMode ? 'FAQ Assistant' : 'AI Assistant'}
+              </h1>
+              <p className="text-sm text-gray-500">
+                {isFAQMode ? 'Frequently Asked Questions' : 'Powered by OpenAI'}
               </p>
             </div>
-          )}
-          
-          {messages.map((message) => (
-            <Message key={message.id} message={message} />
-          ))}
-          
-          {isLoading && (
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="bg-gray-100 rounded-2xl px-4 py-3 max-w-xs">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                </div>
-              </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">AI</span>
+              <Toggle 
+                pressed={isFAQMode}
+                onPressedChange={handleModeToggle}
+                className="data-[state=on]:bg-green-500"
+              />
+              <span className="text-sm text-gray-600">FAQ</span>
             </div>
-          )}
-          
-          <div ref={messagesEndRef} />
+            {!isFAQMode && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowSettings(true)}
+                className="gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Input */}
-        <div className="border-t bg-white p-4">
-          <form onSubmit={handleSubmit} className="flex gap-3">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message..."
-              disabled={isLoading}
-              className="flex-1"
-            />
-            <Button type="submit" disabled={isLoading || !input.trim()}>
-              <Send className="w-4 h-4" />
-            </Button>
-          </form>
-        </div>
+        {/* Chat Content */}
+        {isFAQMode ? (
+          <FAQBot />
+        ) : (
+          <>
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4">
+                    <Bot className="w-8 h-8 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-semibold text-gray-900 mb-2">Welcome to AI Assistant</h2>
+                  <p className="text-gray-600 max-w-md">
+                    Start a conversation with your AI assistant. You can customize its behavior using the settings panel.
+                  </p>
+                </div>
+              )}
+              
+              {messages.map((message) => (
+                <Message key={message.id} message={message} />
+              ))}
+              
+              {isLoading && (
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="bg-gray-100 rounded-2xl px-4 py-3 max-w-xs">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="border-t bg-white p-4">
+              <form onSubmit={handleSubmit} className="flex gap-3">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Type your message..."
+                  disabled={isLoading}
+                  className="flex-1"
+                />
+                <Button type="submit" disabled={isLoading || !input.trim()}>
+                  <Send className="w-4 h-4" />
+                </Button>
+              </form>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
